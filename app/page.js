@@ -10,6 +10,7 @@ export default function Home() {
   const [open, setOpen] = useState(false);
   const [itemName, setItemName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [editItem, setEditItem] = useState(null);
 
   const updateInventory = async () => {
     try {
@@ -65,12 +66,53 @@ export default function Home() {
     }
   };
 
+  const updateItem = async (oldName, newName, newQuantity) => {
+    try {
+      const oldDocRef = doc(collection(firestore, 'pantry'), oldName);
+      const newDocRef = doc(collection(firestore, 'pantry'), newName);
+
+      // Check if the new item name already exists
+      const newDocSnap = await getDoc(newDocRef);
+
+      if (newDocSnap.exists()) {
+        // If the new name already exists, just update the quantity
+        await setDoc(newDocRef, { quantity: newQuantity }, { merge: true });
+      } else {
+        // If the new name does not exist, create a new document
+        await setDoc(newDocRef, { quantity: newQuantity });
+      }
+
+      // Delete the old item if the name has changed
+      if (oldName !== newName) {
+        await deleteDoc(oldDocRef);
+      }
+
+      await updateInventory();
+    } catch (error) {
+      console.error('Error updating item:', error);
+    }
+  };
+
   useEffect(() => {
     updateInventory();
   }, []);
 
-  const handleOpen = () => setOpen(true);
-  const handleClose = () => setOpen(false);
+  const handleOpen = (item = null) => {
+    if (item) {
+      setItemName(item.name);
+      setEditItem({ ...item });
+    } else {
+      setItemName('');
+      setEditItem(null);
+    }
+    setOpen(true);
+  };
+  
+  const handleClose = () => {
+    setItemName('');
+    setEditItem(null);
+    setOpen(false);
+  };
 
   const filteredInventory = inventory.filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -85,7 +127,7 @@ export default function Home() {
       alignItems="center"
       flexDirection="column"
       gap={2}
-      bgcolor="#fce4ec"  // Light pink background
+      bgcolor="#fce4ec"
       p={2}
     >
       <Modal
@@ -106,11 +148,11 @@ export default function Home() {
           gap={3}
           sx={{
             transform: 'translate(-50%, -50%)',
-            borderRadius: '16px', // Rounded corners
+            borderRadius: '16px',
           }}
         >
           <Typography variant="h6" fontFamily="Apple Color Emoji" color="#ec407a">
-            Add Item
+            {editItem ? 'Update Item' : 'Add Item'}
           </Typography>
           <Stack width="100%" direction="row" spacing={2}>
             <TextField
@@ -139,12 +181,19 @@ export default function Home() {
                 fontWeight: 'bold',
               }}
               onClick={() => {
-                addItem(itemName);
-                setItemName('');
+                if (editItem) {
+                  if (itemName.trim() !== '' && !isNaN(parseInt(editItem.quantity))) {
+                    updateItem(editItem.name, itemName, parseInt(editItem.quantity));
+                  }
+                } else {
+                  if (itemName.trim() !== '') {
+                    addItem(itemName);
+                  }
+                }
                 handleClose();
               }}
             >
-              Add
+              {editItem ? 'Update' : 'Add'}
             </Button>
           </Stack>
         </Box>
@@ -152,7 +201,7 @@ export default function Home() {
       <Button 
         variant="contained"
         color="error"
-        onClick={handleOpen}
+        onClick={() => handleOpen()}
         sx={{
           borderRadius: '12px',
           textTransform: 'none',
@@ -216,18 +265,32 @@ export default function Home() {
                 > 
                   {quantity}
                 </Typography>
-                <Button 
-                  variant="contained" 
-                  color="error"
-                  onClick={() => removeItem(name)}
-                  sx={{
-                    borderRadius: '12px',
-                    textTransform: 'none',
-                    fontWeight: 'bold',
-                  }}
-                >
-                  Remove
-                </Button>
+                <Stack direction="row" spacing={2}>
+                  <Button 
+                    variant="contained" 
+                    color="error"
+                    onClick={() => handleOpen({ name, quantity })}
+                    sx={{
+                      borderRadius: '12px',
+                      textTransform: 'none',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    Update
+                  </Button>
+                  <Button 
+                    variant="contained" 
+                    color="error"
+                    onClick={() => removeItem(name)}
+                    sx={{
+                      borderRadius: '12px',
+                      textTransform: 'none',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </Stack>
               </Box>
             ))}
           </Stack>
@@ -236,3 +299,4 @@ export default function Home() {
     </Box>
   );
 }
+
